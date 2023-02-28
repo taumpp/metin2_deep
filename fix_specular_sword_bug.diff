@@ -1,0 +1,110 @@
+ Client/Bin/EterGrnLib/Material.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Client/Bin/EterGrnLib/Material.cpp b/Client/Bin/EterGrnLib/Material.cpp
+index 5b2e7dd..6c94111 100644
+--- a/Client/Bin/EterGrnLib/Material.cpp
++++ b/Client/Bin/EterGrnLib/Material.cpp
+@@ -151,7 +151,7 @@ LPDIRECT3DTEXTURE8 CGrannyMaterial::GetD3DTexture(int iStage) const
+ 	return pTexture->GetD3DTexture();
+ }
+ 
+-float CGrannyMaterial::__GetSpecularPower() const
++float CGrannyMaterial::GetSpecularPower() const
+ {
+ 	return m_fSpecularPower;
+ }
+@@ -291,7 +291,7 @@ void CGrannyMaterial::__ApplySpecularRenderState()
+ 	else
+ 		STATEMANAGER.SetTexture(1, NULL);
+ 
+-	STATEMANAGER.SetRenderState(D3DRS_TEXTUREFACTOR, D3DXCOLOR(g_fSpecularColor.r, g_fSpecularColor.g, g_fSpecularColor.b, __GetSpecularPower()));
++	STATEMANAGER.SetRenderState(D3DRS_TEXTUREFACTOR, D3DXCOLOR(g_fSpecularColor.r, g_fSpecularColor.g, g_fSpecularColor.b, GetSpecularPower()));
+ 	STATEMANAGER.SaveTextureStageState(1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEREFLECTIONVECTOR);
+ 	STATEMANAGER.SaveTextureStageState(0, D3DTSS_COLORARG1,	D3DTA_TEXTURE);
+ 	STATEMANAGER.SaveTextureStageState(0, D3DTSS_COLORARG2,	D3DTA_DIFFUSE);
+ Client/Bin/EterGrnLib/Material.h | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/Client/Bin/EterGrnLib/Material.h b/Client/Bin/EterGrnLib/Material.h
+index dfdab6e..78f7ee1 100644
+--- a/Client/Bin/EterGrnLib/Material.h
++++ b/Client/Bin/EterGrnLib/Material.h
+@@ -54,11 +54,13 @@ class CGrannyMaterial : public CReferenceObject
+ 
+ 		CGrannyMaterial::EType	GetType() const;
+ 		LPDIRECT3DTEXTURE8		GetD3DTexture(int iStage) const;
+-
++		float					GetSpecularPower() const;
++		bool					IsSpecularEnabled() const { return m_bSpecularEnable; }
++		BYTE					GetSphereMapIndex() const { return m_bSphereMapIndex; }
+ 	protected:
+ 		CGraphicImage *			__GetImagePointer(const char * c_szFileName);
+ 
+-		float					__GetSpecularPower() const;
++
+ 
+ 		void					__ApplyDiffuseRenderState();
+ 		void					__RestoreDiffuseRenderState();
+ Client/Bin/EterGrnLib/ModelInstance.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Client/Bin/EterGrnLib/ModelInstance.cpp b/Client/Bin/EterGrnLib/ModelInstance.cpp
+index e7ad5ec..e814fca 100644
+--- a/Client/Bin/EterGrnLib/ModelInstance.cpp
++++ b/Client/Bin/EterGrnLib/ModelInstance.cpp
+@@ -17,6 +17,8 @@ void CGrannyModelInstance::SetMaterialImagePointer(const char* c_szImageName, CG
+ void CGrannyModelInstance::SetMaterialData(const char* c_szImageName, const SMaterialData& c_rkMaterialData)
+ {
+ 	m_kMtrlPal.SetMaterialData(c_szImageName, c_rkMaterialData);
++
++	material_data_ = c_rkMaterialData;
+ }
+ 
+ void CGrannyModelInstance::SetSpecularInfo(const char* c_szMtrlName, BOOL bEnable, float fPower)
+@@ -99,7 +101,7 @@ void CGrannyModelInstance::__Initialize()
+ 	m_meshMatrices = NULL;
+ 	m_pgrnCtrl = NULL;
+ 	m_pgrnAni = NULL;
+-
++	material_data_ = {};
+ 	m_dwOldUpdateFrame=0;
+ 
+ }
+ Client/Bin/EterGrnLib/ModelInstance.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Client/Bin/EterGrnLib/ModelInstance.h b/Client/Bin/EterGrnLib/ModelInstance.h
+index f1e1bfb..2a6ad65 100644
+--- a/Client/Bin/EterGrnLib/ModelInstance.h
++++ b/Client/Bin/EterGrnLib/ModelInstance.h
+@@ -158,7 +158,7 @@ class CGrannyModelInstance : public CGraphicCollisionObject
+ 		bool							m_isDeformableVertexBuffer;
+ 
+ 		CGrannyModelInstance** m_ppkSkeletonInst;
+-
++		SMaterialData material_data_;
+ 	public:
+ 		bool							HaveBlendThing() { return m_pModel->HaveBlendThing(); }
+ };
+ Client/Bin/EterGrnLib/ModelInstanceRender.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Client/Bin/EterGrnLib/ModelInstanceRender.cpp b/Client/Bin/EterGrnLib/ModelInstanceRender.cpp
+index ade48d0..8015ef3 100644
+--- a/Client/Bin/EterGrnLib/ModelInstanceRender.cpp
++++ b/Client/Bin/EterGrnLib/ModelInstanceRender.cpp
+@@ -151,6 +151,13 @@ void CGrannyModelInstance::RenderMeshNodeListWithOneTexture(CGrannyMesh::EType e
+ 			ms_faceCount += pTriGroupNode->triCount;
+ 
+ 			CGrannyMaterial& rkMtrl=m_kMtrlPal.GetMaterialRef(pTriGroupNode->mtrlIndex);
++
++			if (!material_data_.pImage)
++			{
++				if (std::fabs(rkMtrl.GetSpecularPower() - material_data_.fSpecularPower) >= std::numeric_limits<float>::epsilon())
++					rkMtrl.SetSpecularInfo(material_data_.isSpecularEnable, material_data_.fSpecularPower, material_data_.bSphereMapIndex);
++			}
++
+ 			rkMtrl.ApplyRenderState();
+ 			STATEMANAGER.DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, vtxCount, pTriGroupNode->idxPos, pTriGroupNode->triCount);
+ 			rkMtrl.RestoreRenderState();
