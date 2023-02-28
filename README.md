@@ -1,1 +1,1 @@
-Special thanks for @rid.
+Special thanks for @rid from sura_head.exe
